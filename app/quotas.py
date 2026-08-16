@@ -1,8 +1,7 @@
-from datetime import datetime, timezone
-
 from sqlmodel import Session, func, select
 
 from app.models import Plan, Subscription, UsageEvent
+from app.time_utils import month_start
 
 ACTIVE_STATUSES = {"active", "trialing"}
 
@@ -23,11 +22,6 @@ class PaymentRequiredError(Exception):
         super().__init__(message)
 
 
-def _month_start() -> datetime:
-    now = datetime.now(timezone.utc)
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-
 def get_plan_for_tenant(session: Session, tenant_id: int) -> Plan:
     subscription = session.exec(
         select(Subscription).where(Subscription.tenant_id == tenant_id)
@@ -43,13 +37,13 @@ def get_plan_for_tenant(session: Session, tenant_id: int) -> Plan:
 
     plan = session.get(Plan, subscription.plan_id)
     if plan is None:
-        raise PaymentRequiredError(f"Subscription references a missing plan.")
+        raise PaymentRequiredError("Subscription references a missing plan.")
     return plan
 
 
 def current_usage(session: Session, tenant_id: int, usage_type: str) -> int:
     """Sum of quantity for this tenant + usage type, for the current calendar month."""
-    since = _month_start()
+    since = month_start()
     total = session.exec(
         select(func.coalesce(func.sum(UsageEvent.quantity), 0)).where(
             UsageEvent.tenant_id == tenant_id,

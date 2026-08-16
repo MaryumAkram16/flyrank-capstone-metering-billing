@@ -22,12 +22,22 @@ a test name + output, a curl transcript, or a log line. Claims without evidence 
     Full suite: `pytest -q` → 11 passed.
 
 ## Cost calculation
-- [ ] Monthly usage rolls up into a cost figure per tenant
-  - Evidence:
-- [ ] AI token pricing handles cached input tokens, reasoning tokens, and output pricing correctly
-  - Evidence:
-- [ ] Pricing constants are pinned and covered by tests
-  - Evidence:
+- [x] Monthly usage rolls up into a cost figure per tenant
+  - Evidence: live run — `GET /usage?tenant_id=1` → `{"api_calls":{"used":999,...},"ai_tokens":{"used":100000,...},
+    "cost":{"micro_dollars":126000,"display":"$0.126000"}}` — combines 999 API calls ($0.0999) +
+    100k AI tokens ($0.0261) into one rollup, computed fresh from stored usage events each call.
+- [x] AI token pricing handles cached input tokens, reasoning tokens, and output pricing correctly
+  - Evidence: `tests/test_pricing.py::test_cached_input_tokens_are_cheaper_than_fresh_input` (cached
+    priced at $0.03/1M vs $0.15/1M fresh), `test_reasoning_tokens_are_billed_at_the_output_rate`
+    (reasoning == output rate, not free, not separate), `test_mixed_categories_are_priced_independently_not_flattened`
+    (pinned regression: 500k of each category → exactly $0.690000, proving categories aren't summed at
+    one flat rate). Live run: `POST /generate` with input=50000, cached_input=20000, output=20000,
+    reasoning=10000 → `cost_micro_dollars: 26100` ($0.0261), matching hand-computed expected value exactly.
+- [x] Pricing constants are pinned and covered by tests
+  - Evidence: `app/pricing.py` — `PRICE_PER_MILLION_TOKENS_MICRO_DOLLARS` and
+    `PRICE_PER_API_CALL_MICRO_DOLLARS` are the single source of truth; `tests/test_pricing.py`
+    (11 tests) asserts against these constants directly, not hardcoded numbers, so a constant
+    change and a calculation bug can't silently cancel out. Full suite: `pytest -q` → 31 passed.
 
 ## Stripe integration
 

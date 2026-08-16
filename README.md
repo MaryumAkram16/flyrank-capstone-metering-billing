@@ -53,6 +53,19 @@ uvicorn app.main:app --reload
 
 Run tests: `pytest -q`
 
+### Example: metering an AI-token call
+
+```
+curl -X POST http://localhost:8000/generate -H "Content-Type: application/json" -d '{
+  "tenant_id": 1,
+  "idempotency_key": "unique-per-request",
+  "usage_type": "ai_tokens",
+  "metadata": {"input_tokens": 50000, "cached_input_tokens": 20000, "output_tokens": 20000, "reasoning_tokens": 10000}
+}'
+```
+
+Retrying with the same `idempotency_key` returns the identical result — `duplicate: true` — and never creates a second usage event or double-counts cost.
+
 ## Limitations
 
 - No proration, invoicing, or overage billing (out of core scope — see DESIGN.md non-goal).
@@ -71,4 +84,5 @@ Run tests: `pytest -q`
 Phase 1 (design) — done.
 Phase 2 (core billing logic: idempotent metering + quota enforcement) — done, 11/11 tests passing.
 Phase 3 (FakeStripe checkout + signed/deduped webhooks) — done, 21/21 tests passing.
-See DESIGN.md and EVIDENCE.md for current state.
+Phase 4 (cost rollups + AI-token pricing rules) — done, 31/31 tests passing.
+Core Definition of Done (§6) is complete. See DESIGN.md and EVIDENCE.md for full detail.

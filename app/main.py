@@ -10,6 +10,7 @@ from app.checkout import CheckoutError, complete_checkout_session, create_checko
 from app.db import get_session, init_db
 from app.fake_stripe import SignatureVerificationError, build_event, sign_payload, verify_and_parse
 from app.metering import record_usage
+from app.pricing import calculate_event_cost_micro_dollars, micro_dollars_to_display, rollup_cost_micro_dollars
 from app.quotas import (
     PaymentRequiredError,
     QuotaExceededError,
@@ -35,8 +36,8 @@ class GenerateRequest(BaseModel):
     tenant_id: int
     idempotency_key: str
     usage_type: str  # "api_call" | "ai_tokens"
-    quantity: int
-    metadata: Optional[dict] = None
+    quantity: Optional[int] = None  # required for api_call; derived from metadata for ai_tokens
+    metadata: Optional[dict] = None  # for ai_tokens: input_tokens, cached_input_tokens, output_tokens, reasoning_tokens
 
 
 @app.post("/generate")
@@ -44,9 +45,12 @@ def generate(payload: GenerateRequest, session: Session = Depends(get_session)):
     """
     Dummy billable endpoint. Flow:
       1. Duplicate idempotency key → return the original result, no side effects.
-      2. Otherwise, check the quota BEFORE recording anything — a request that
-         would exceed the limit is rejected and never metered.
-      3. If allowed, record the usage event.
+      2. For ai_tokens, quantity is DERIVED from the token breakdown in metadata
+         (input + cached_input + output + reasoning) — never taken from the client
+         directly, so quota and cost always agree with what was actually recorded.
+      3. Check the quota BEFORE recording anything — a request that would exceed
+         the limit is rejected and never metered.
+      4. If allowed, record the usage event and return its cost.
     """
     from sqlmodel import select
 
@@ -59,17 +63,39 @@ def generate(payload: GenerateRequest, session: Session = Depends(get_session)):
         )
     ).first()
     if existing is not None:
+        existing_metadata = json.loads(existing.metadata_json) if existing.metadata_json else None
+        cost = calculate_event_cost_micro_dollars(existing.type, existing.quantity, existing_metadata)
         return {
             "status": "ok",
             "duplicate": True,
             "usage_event_id": existing.id,
             "quantity": existing.quantity,
+            "cost_micro_dollars": cost,
+            "cost_display": micro_dollars_to_display(cost),
         }
 
-    try:
-        used_before, limit = enforce_quota(
-            session, payload.tenant_id, payload.usage_type, payload.quantity
+    if payload.usage_type == "ai_tokens":
+        meta = payload.metadata or {}
+        required_fields = ["input_tokens", "cached_input_tokens", "output_tokens"]
+        missing = [f for f in required_fields if f not in meta]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"ai_tokens usage requires metadata fields: {missing}",
+            )
+        quantity = (
+            meta.get("input_tokens", 0)
+            + meta.get("cached_input_tokens", 0)
+            + meta.get("output_tokens", 0)
+            + meta.get("reasoning_tokens", 0)
         )
+    else:
+        if payload.quantity is None:
+            raise HTTPException(status_code=400, detail="quantity is required for api_call usage")
+        quantity = payload.quantity
+
+    try:
+        used_before, limit = enforce_quota(session, payload.tenant_id, payload.usage_type, quantity)
     except PaymentRequiredError as e:
         raise HTTPException(status_code=402, detail=e.message)
     except QuotaExceededError as e:
@@ -80,17 +106,21 @@ def generate(payload: GenerateRequest, session: Session = Depends(get_session)):
         payload.tenant_id,
         payload.idempotency_key,
         payload.usage_type,
-        payload.quantity,
+        quantity,
         payload.metadata,
     )
+
+    cost = calculate_event_cost_micro_dollars(payload.usage_type, quantity, payload.metadata)
 
     return {
         "status": "ok",
         "duplicate": not created,
         "usage_event_id": event.id,
         "quantity": event.quantity,
-        "used_this_month": used_before + payload.quantity,
+        "used_this_month": used_before + quantity,
         "limit": limit,
+        "cost_micro_dollars": cost,
+        "cost_display": micro_dollars_to_display(cost),
     }
 
 
@@ -103,12 +133,13 @@ def usage(tenant_id: int, session: Session = Depends(get_session)):
 
     api_used = current_usage(session, tenant_id, "api_call")
     token_used = current_usage(session, tenant_id, "ai_tokens")
+    cost = rollup_cost_micro_dollars(session, tenant_id)
 
     return {
         "tenant_id": tenant_id,
         "api_calls": {"used": api_used, "limit": plan.api_call_limit},
         "ai_tokens": {"used": token_used, "limit": plan.ai_token_limit},
-        # cost rollup lands in Phase 4 once pricing.py exists
+        "cost": {"micro_dollars": cost, "display": micro_dollars_to_display(cost)},
     }
 
 
