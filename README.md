@@ -45,4 +45,6 @@ Run tests: `pytest -q`
 
 ## Status
 
-Phase 1 (design) — in progress. See DESIGN.md and EVIDENCE.md for current state.
+Phase 1 (design) — done.
+Phase 2 (core billing logic: idempotent metering + quota enforcement) — done, 11/11 tests passing.
+See DESIGN.md and EVIDENCE.md for current state.
