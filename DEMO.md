@@ -17,6 +17,11 @@ expected output:
 python -m tools.demo
 ```
 
+Alternatively, open `http://localhost:8000/dashboard` in a browser for a visual walkthrough —
+click "Meter 1 API call" repeatedly to watch the gauge fill and the warning/critical alert
+appear, then "Upgrade to Pro" to watch the plan flip live. Good as a visual companion during
+the demo, alongside (not instead of) the terminal output the evaluator actually probes against.
+
 ## The flow, live (narrate each step)
 
 1. **Boundary refusal** — `POST /generate` for tenant 1, one more API call. It lands exactly on

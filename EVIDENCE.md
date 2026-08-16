@@ -78,3 +78,26 @@ See README "Limitations" for the full rationale.
   - Evidence: `README.md` (architecture diagrams, setup, Checkout example, limitations, status),
     `DESIGN.md` (Phase 1 design doc), `DEMO.md` (6-minute demo script), `capstone.yaml`,
     `BUILDLOG.md`, `.env.example`, this file — all present at repo root.
+
+## Stretch goal — Usage alerts (§9)
+- [x] Notify customers at 80% and 100% of quota
+  - Evidence: `app/alerts.py::compute_alerts`, wired into `GET /usage` as an `alerts` field.
+    `tests/test_alerts.py` — 8 tests: no alert below 80%, warning at exactly 80%, critical at
+    exactly 100%, both usage types alert independently, zero-limit doesn't crash, and a
+    regression test for a real rounding bug found while building this (999/1000 = 99.9% must
+    read "99%", never round up to a misleading "100%" warning). Live run: `GET /usage` for a
+    tenant at 999/1000 → `{"level":"warning","message":"api_call usage is at 99% of quota
+    (999/1000)."}`; after one more metered call (1000/1000) → `{"level":"critical",...
+    "100% of quota (1000/1000)."}`.
+
+## Frontend dashboard (bonus, not graded core)
+- Live run: `GET /dashboard` serves the frontend; clicking through "Meter 1 API call" →
+  warning/critical alert appears in the UI; "Upgrade to Pro" runs the full Checkout →
+  FakeStripe pay → webhook flow and the plan badge flips live.
+- Bug found and fixed via this frontend: browser `JSON.stringify()` re-serializes with
+  different whitespace than Python's `json.dumps()` used to sign the payload, breaking
+  webhook signature verification (400) specifically for browser-originated requests — not
+  caught by the Python-only test suite or CLI tools. Fixed by returning the raw payload string
+  from `/fake-checkout/{id}/pay` instead of a parsed object. Regression test:
+  `tests/test_webhooks.py::test_reserialized_payload_with_different_whitespace_fails_verification`.
+  Full suite: `pytest -q` → 40 passed.

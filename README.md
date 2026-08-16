@@ -79,6 +79,30 @@ Retrying with the same `idempotency_key` returns the identical result — `dupli
   Swapping in real Stripe later only touches `app/fake_stripe.py` and `app/checkout.py`; the
   webhook handler and data model don't change.
 
+## Stretch goal
+
+**Usage alerts (§9)**: `GET /usage` includes an `alerts` array — a "warning" entry at ≥80% of a
+plan's quota, "critical" at 100%, computed independently for API calls and AI tokens
+(`app/alerts.py`, 8 pinned tests, including a regression test for a rounding bug caught while
+building this — 999/1000 (99.9%) must never round up to a misleading "100%" warning message).
+
+## Frontend dashboard
+
+`GET /dashboard` serves a small vanilla-JS/HTML/CSS frontend (`static/dashboard.html`, no build
+step) over the JSON API above: live usage meters for API calls and AI tokens, the cost rollup,
+active alerts, and an activity log, with buttons that exercise the real endpoints — meter an API
+call, meter a batch of AI tokens, or run the full Checkout → FakeStripe pay → webhook flow to
+upgrade to Pro. It's a demo/visualization layer, not part of the graded core API.
+
+**A real bug this caught**: the browser's Checkout flow initially failed webhook signature
+verification with a 400, even though the identical flow worked fine from Python. Cause:
+`POST /fake-checkout/{id}/pay` originally returned the signed event as a *parsed* JSON object;
+the browser's `JSON.stringify()` re-serializes it with different whitespace than Python's
+`json.dumps()` used to sign it, so the HMAC no longer matched the re-encoded bytes. Fixed by
+having the endpoint return the raw payload string instead, sent verbatim by the client — the
+same class of bug real Stripe integrations have to get right (always verify against the exact
+raw delivered body, never a re-encoded copy). See `tests/test_webhooks.py::test_reserialized_payload_with_different_whitespace_fails_verification`.
+
 ## Status
 
 Phase 1 (design) — done.
@@ -86,4 +110,5 @@ Phase 2 (core billing logic: idempotent metering + quota enforcement) — done, 
 Phase 3 (FakeStripe checkout + signed/deduped webhooks) — done, 21/21 tests passing.
 Phase 4 (cost rollups + AI-token pricing rules) — done, 31/31 tests passing.
 Phase 5 (demo prep) — done. See DEMO.md for the rehearsed 6-minute flow.
-Core Definition of Done (§6) is complete. See DESIGN.md and EVIDENCE.md for full detail.
+Core Definition of Done (§6) is complete, plus the Usage Alerts stretch goal and a frontend dashboard.
+See DESIGN.md and EVIDENCE.md for full detail.

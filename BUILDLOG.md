@@ -22,3 +22,22 @@ Honest log of where AI helped, where it was wrong, and what was changed. Updated
   by defaulting `api_call` quantity to 1 when omitted.
 - What I changed or wrote myself: reviewed and approved the FakeStripe design decision; ran
   `pytest -q` and the live demo myself after each phase to confirm the numbers before moving on.
+
+## Session 2 — 2026-08-16 (frontend dashboard + stretch goal)
+- What I asked AI for: a usage-alerts stretch goal (§9) and a frontend dashboard like the other
+  capstone had.
+- What it got right: the alert thresholds and dashboard UI worked correctly on the first pass in
+  every server-side test.
+- What it got wrong / had to fix: the "Upgrade to Pro" button on the dashboard failed webhook
+  signature verification with a 400 in the actual browser, even though the identical flow
+  passed in Python (tests, CLI tool, curl). Root cause: the webhook payload was signed
+  server-side with Python's `json.dumps()` (which inserts spaces), but the browser's
+  `JSON.stringify()` re-serializes without spaces — different bytes, so the HMAC signature no
+  longer matched. This is a known class of bug in real Stripe integrations (you must verify
+  against the exact raw delivered body, never a re-encoded copy) — it just wasn't caught until
+  I actually clicked the button in a real browser and looked at the activity log, rather than
+  trusting the test suite and Python-only tools alone.
+- What I changed or wrote myself: caught the bug by screenshotting the dashboard after clicking
+  "Upgrade to Pro" and noticing the 400 in the activity log plus the plan badge still saying
+  Free. Confirmed the fix (server now returns the raw payload string; client sends it verbatim)
+  against a live server before considering it done, and added a regression test.

@@ -1,11 +1,14 @@
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from app.alerts import compute_alerts
 from app.checkout import CheckoutError, complete_checkout_session, create_checkout_session
 from app.db import get_session, init_db
 from app.fake_stripe import SignatureVerificationError, build_event, sign_payload, verify_and_parse
@@ -24,7 +27,15 @@ from app.webhook_handlers import handle_event
 # In a real Stripe setup this would be the whsec_ signing secret from the Dashboard.
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "whsec_fake_test_secret_change_me")
 
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
 app = FastAPI(title="Usage Metering & Billing Engine")
+
+
+@app.get("/dashboard")
+def dashboard():
+    """Serves the usage dashboard — a small vanilla-JS frontend over the JSON API below."""
+    return FileResponse(STATIC_DIR / "dashboard.html")
 
 
 @app.on_event("startup")
@@ -134,12 +145,15 @@ def usage(tenant_id: int, session: Session = Depends(get_session)):
     api_used = current_usage(session, tenant_id, "api_call")
     token_used = current_usage(session, tenant_id, "ai_tokens")
     cost = rollup_cost_micro_dollars(session, tenant_id)
+    alerts = compute_alerts(api_used, plan.api_call_limit, token_used, plan.ai_token_limit)
 
     return {
         "tenant_id": tenant_id,
+        "plan_name": plan.name,
         "api_calls": {"used": api_used, "limit": plan.api_call_limit},
         "ai_tokens": {"used": token_used, "limit": plan.ai_token_limit},
         "cost": {"micro_dollars": cost, "display": micro_dollars_to_display(cost)},
+        "alerts": alerts,
     }
 
 
@@ -175,7 +189,13 @@ def fake_checkout_pay(session_id: str, session: Session = Depends(get_session)):
     payload_bytes = json.dumps(event).encode()
     signature = sign_payload(payload_bytes, STRIPE_WEBHOOK_SECRET)
 
-    return {"event": event, "stripe_signature": signature}
+    # Return the RAW payload string, not the parsed event object. The signature
+    # was computed over these exact bytes — a caller that re-serializes the
+    # parsed object (e.g. JavaScript's JSON.stringify) will produce different
+    # bytes (different whitespace) and the signature will no longer match.
+    # Real Stripe integrations hit this same class of bug: always verify
+    # against the raw delivered body, never a re-encoded copy of it.
+    return {"payload": payload_bytes.decode(), "stripe_signature": signature}
 
 
 @app.post("/webhooks/stripe")

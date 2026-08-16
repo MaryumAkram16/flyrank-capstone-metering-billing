@@ -59,6 +59,26 @@ def test_malformed_header_is_rejected():
         verify_and_parse(payload, "not-a-real-header", SECRET)
 
 
+def test_reserialized_payload_with_different_whitespace_fails_verification():
+    """
+    Regression: a caller must forward the EXACT raw payload bytes, never a
+    re-serialized copy. json.dumps (Python, spaces after ':'/',') and
+    JSON.stringify (JavaScript, no spaces) produce different bytes for the
+    same logical object — this broke the dashboard's browser-side Checkout
+    flow until /fake-checkout/{id}/pay started returning the raw payload
+    string instead of a parsed event object for the caller to re-encode.
+    """
+    event = build_event("checkout.session.completed", {"tenant_id": 1, "plan_id": 2})
+    payload = json.dumps(event).encode()
+    header = sign_payload(payload, SECRET)
+
+    # Simulate JSON.stringify's compact formatting — same data, different bytes.
+    reserialized_payload = json.dumps(event, separators=(",", ":")).encode()
+
+    with pytest.raises(SignatureVerificationError):
+        verify_and_parse(reserialized_payload, header, SECRET)
+
+
 def _seed_tenant_on_free(session):
     free = Plan(name="Free", api_call_limit=1000, ai_token_limit=100_000)
     pro = Plan(name="Pro", api_call_limit=100_000, ai_token_limit=10_000_000)

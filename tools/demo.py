@@ -74,13 +74,13 @@ def main() -> None:
         print(f"\nCustomer 'pays' on the hosted page for session {checkout_id}...")
         resp = client.post(f"/fake-checkout/{checkout_id}/pay")
         show(resp)
-        event = resp.json()["event"]
+        payload = resp.json()["payload"]  # raw string — send verbatim, never re-serialize
         signature = resp.json()["stripe_signature"]
 
         print("\nDelivering the signed webhook to /webhooks/stripe (this is what actually applies it):")
         resp = client.post(
             "/webhooks/stripe",
-            content=json.dumps(event),
+            content=payload,
             headers={"Content-Type": "application/json", "Stripe-Signature": signature},
         )
         show(resp)
@@ -105,7 +105,7 @@ def main() -> None:
         print("\nReplaying the REAL checkout event from Step 3 a second time:")
         resp = client.post(
             "/webhooks/stripe",
-            content=json.dumps(event),
+            content=payload,
             headers={"Content-Type": "application/json", "Stripe-Signature": signature},
         )
         show(resp)
