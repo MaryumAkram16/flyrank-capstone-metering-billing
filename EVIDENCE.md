@@ -64,9 +64,17 @@ See README "Limitations" for the full rationale.
     Full suite: `pytest -q` → 21 passed.
 
 ## Data model, tests & documentation
-- [ ] Database includes tenants, plans, subscriptions, and usage events; customer data isolated per tenant
-  - Evidence:
-- [ ] Tests cover: duplicate usage prevention, quota boundary cases (at/just under/over), cost calculations, invalid-webhook rejection, duplicate-webhook handling
-  - Evidence:
-- [ ] README + architecture diagram + setup instructions; submission-pack files present
-  - Evidence:
+- [x] Database includes tenants, plans, subscriptions, and usage events; customer data isolated per tenant
+  - Evidence: `app/models.py` — `Tenant`, `Plan`, `Subscription`, `UsageEvent`, `ProcessedWebhookEvent`,
+    `CheckoutSession`. Every query in `app/quotas.py`, `app/metering.py`, `app/pricing.py`, and
+    `app/webhook_handlers.py` scopes by `tenant_id`; `test_same_key_different_tenants_are_independent`
+    proves two tenants using the identical idempotency key never collide.
+- [x] Tests cover: duplicate usage prevention, quota boundary cases (at/just under/over), cost calculations, invalid-webhook rejection, duplicate-webhook handling
+  - Evidence: 31 tests total, `pytest -q` → 31 passed. `tests/test_metering.py` (duplicate prevention),
+    `tests/test_quotas.py` (exact boundary / just-under / over-limit / no-subscription / canceled-subscription),
+    `tests/test_pricing.py` (pinned cost math, cached-input/reasoning-token rules), `tests/test_webhooks.py`
+    (forged/tampered/stale/malformed signature rejection, exact-once webhook dedup).
+- [x] README + architecture diagram + setup instructions; submission-pack files present
+  - Evidence: `README.md` (architecture diagrams, setup, Checkout example, limitations, status),
+    `DESIGN.md` (Phase 1 design doc), `DEMO.md` (6-minute demo script), `capstone.yaml`,
+    `BUILDLOG.md`, `.env.example`, this file — all present at repo root.

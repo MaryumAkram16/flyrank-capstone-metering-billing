@@ -90,9 +90,9 @@ def generate(payload: GenerateRequest, session: Session = Depends(get_session)):
             + meta.get("reasoning_tokens", 0)
         )
     else:
-        if payload.quantity is None:
-            raise HTTPException(status_code=400, detail="quantity is required for api_call usage")
-        quantity = payload.quantity
+        # api_call: quantity defaults to 1 (one call = one unit), but callers
+        # can pass a larger batch size explicitly if they're metering in bulk.
+        quantity = payload.quantity if payload.quantity is not None else 1
 
     try:
         used_before, limit = enforce_quota(session, payload.tenant_id, payload.usage_type, quantity)

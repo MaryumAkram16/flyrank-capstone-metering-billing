@@ -85,4 +85,5 @@ Phase 1 (design) — done.
 Phase 2 (core billing logic: idempotent metering + quota enforcement) — done, 11/11 tests passing.
 Phase 3 (FakeStripe checkout + signed/deduped webhooks) — done, 21/21 tests passing.
 Phase 4 (cost rollups + AI-token pricing rules) — done, 31/31 tests passing.
+Phase 5 (demo prep) — done. See DEMO.md for the rehearsed 6-minute flow.
 Core Definition of Done (§6) is complete. See DESIGN.md and EVIDENCE.md for full detail.
