@@ -1,5 +1,6 @@
 import json
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -29,18 +30,20 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "whsec_fake_test_secr
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="Usage Metering & Billing Engine")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="Usage Metering & Billing Engine", lifespan=lifespan)
 
 
 @app.get("/dashboard")
 def dashboard():
     """Serves the usage dashboard — a small vanilla-JS frontend over the JSON API below."""
     return FileResponse(STATIC_DIR / "dashboard.html")
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
 
 
 class GenerateRequest(BaseModel):
