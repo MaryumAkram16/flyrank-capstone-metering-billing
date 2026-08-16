@@ -50,6 +50,19 @@ class UsageEvent(SQLModel, table=True):
 
 
 class ProcessedWebhookEvent(SQLModel, table=True):
-    """Dedup table for Stripe webhook events — built in Phase 3."""
+    """Dedup table for webhook events — same event id processed at most once."""
     stripe_event_id: str = Field(primary_key=True)
     processed_at: datetime = Field(default_factory=_utcnow)
+
+
+class CheckoutSession(SQLModel, table=True):
+    """
+    A pending or completed Checkout session. Mirrors Stripe's checkout.Session
+    shape closely enough that swapping in real Stripe later only touches
+    app/checkout.py and app/fake_stripe.py, not the data model or webhook logic.
+    """
+    id: str = Field(primary_key=True)  # e.g. "cs_test_<hex>"
+    tenant_id: int = Field(foreign_key="tenant.id")
+    plan_id: int = Field(foreign_key="plan.id")
+    status: str = "open"  # open | complete
+    created_at: datetime = Field(default_factory=_utcnow)
