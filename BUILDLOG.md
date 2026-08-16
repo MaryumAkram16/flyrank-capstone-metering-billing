@@ -41,3 +41,22 @@ Honest log of where AI helped, where it was wrong, and what was changed. Updated
   "Upgrade to Pro" and noticing the 400 in the activity log plus the plan badge still saying
   Free. Confirmed the fix (server now returns the raw payload string; client sends it verbatim)
   against a live server before considering it done, and added a regression test.
+
+## Session 3 — 2026-08-16 (cross-check against the brief)
+- What I asked AI for: re-read the full capstone brief PDF against the actual repo and check
+  for anything missed.
+- What it got right: correctly cross-referenced the Definition of Done, required files, and
+  probes against the live code instead of just re-stating what was already claimed done.
+- What it got wrong / had to fix: manually probing `/generate` with `quantity: -500` (a test
+  case the AI ran specifically because the brief warns "a single bug can mean... giving away
+  unlimited access, or losing revenue") revealed a real gap — negative quantities were silently
+  accepted, silently reduced recorded usage below its true value, and produced negative cost.
+  Fixed with `Field(gt=0)` validation and explicit non-negative-integer checks on token counts.
+  While adding an API-level test for this, also hit a second, unrelated bug: the test fixture's
+  in-memory SQLite engine didn't use `StaticPool`, so FastAPI's threadpool execution of the sync
+  route handler got a different (empty) database than the test set up — a known FastAPI+SQLite
+  testing gotcha. Also found `.env.example` and `capstone.yaml` were stale from before the
+  FakeStripe swap, and that `tools/fake_stripe_cli.py` existed but was never documented.
+- What I changed or wrote myself: reviewed the negative-quantity bug report and confirmed it
+  live myself (curl against a running server) before and after the fix, matching the exact
+  before/after numbers described.

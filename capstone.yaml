@@ -9,10 +9,16 @@ endpoints:
     description: Dummy billable endpoint — records usage event, checks quota, returns cost
   - method: GET
     path: /usage
-    description: Rollup of a tenant's usage, limit, and cost for the month
+    description: Rollup of a tenant's usage, limit, cost, and active alerts for the month
   - method: POST
     path: /checkout
-    description: Creates a Stripe test-mode Checkout session for the Pro plan
+    description: Creates a FakeStripe test-mode Checkout session for a plan (see app/fake_stripe.py for why FakeStripe, not real Stripe)
+  - method: POST
+    path: /fake-checkout/{id}/pay
+    description: Stands in for Stripe's hosted Checkout page — simulates payment, returns a signed webhook event
   - method: POST
     path: /webhooks/stripe
     description: Verifies signature, deduplicates events, syncs tenant plan/status
+  - method: GET
+    path: /dashboard
+    description: Optional frontend — visual usage ledger over the JSON API above

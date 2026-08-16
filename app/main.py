@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from app.alerts import compute_alerts
@@ -47,7 +47,7 @@ class GenerateRequest(BaseModel):
     tenant_id: int
     idempotency_key: str
     usage_type: str  # "api_call" | "ai_tokens"
-    quantity: Optional[int] = None  # required for api_call; derived from metadata for ai_tokens
+    quantity: Optional[int] = Field(default=None, gt=0)  # required for api_call; derived from metadata for ai_tokens
     metadata: Optional[dict] = None  # for ai_tokens: input_tokens, cached_input_tokens, output_tokens, reasoning_tokens
 
 
@@ -94,6 +94,18 @@ def generate(payload: GenerateRequest, session: Session = Depends(get_session)):
                 status_code=400,
                 detail=f"ai_tokens usage requires metadata fields: {missing}",
             )
+
+        token_fields = ["input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"]
+        invalid = [
+            f for f in token_fields
+            if f in meta and (not isinstance(meta[f], int) or meta[f] < 0)
+        ]
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Token counts must be non-negative integers: {invalid}",
+            )
+
         quantity = (
             meta.get("input_tokens", 0)
             + meta.get("cached_input_tokens", 0)
@@ -103,6 +115,7 @@ def generate(payload: GenerateRequest, session: Session = Depends(get_session)):
     else:
         # api_call: quantity defaults to 1 (one call = one unit), but callers
         # can pass a larger batch size explicitly if they're metering in bulk.
+        # Field(gt=0) on the request model already rejects zero/negative values.
         quantity = payload.quantity if payload.quantity is not None else 1
 
     try:

@@ -64,6 +64,10 @@ uvicorn app.main:app --reload
 - Run tests: `pytest -q`
 - Try the dashboard: `http://localhost:8000/dashboard`
 - Run the demo script: `python -m tools.demo` (see `DEMO.md`)
+- Replay/trigger webhooks locally (stands in for `stripe listen` / `stripe trigger`):
+  `python -m tools.fake_stripe_cli sub_deleted --tenant-id 1`,
+  `python -m tools.fake_stripe_cli forge --tenant-id 1 --plan-id 2` (expects 400),
+  `python -m tools.fake_stripe_cli replay --tenant-id 1 --plan-id 2` (expects dedup on the 2nd call)
 
 **Example — metering an AI-token call:**
 
@@ -116,6 +120,16 @@ Retrying with the same `idempotency_key` returns the identical result (`duplicat
 
 ---
 
+## Cross-checked against the brief
+
+Re-read the full capstone brief against the actual repo state and found + fixed two real gaps:
+
+- **Negative quantity / negative token counts were silently accepted.** `POST /generate` with `quantity: -500` reduced `used_this_month` below its true value (bypassing quota) and produced a **negative cost** — exactly the "giving away unlimited access, or losing revenue" failure mode the brief warns about. Fixed with `Field(gt=0)` on the request model for `quantity`, and explicit non-negative-integer validation on the `ai_tokens` metadata breakdown. See `tests/test_api_validation.py` (6 tests) and `EVIDENCE.md`.
+- **Stale `.env.example` and `capstone.yaml`.** Both still referenced real Stripe keys/API after the FakeStripe swap in Phase 3 — `.env.example` had unused `STRIPE_SECRET_KEY`/`STRIPE_PRICE_ID_PRO` fields the app never reads, and `capstone.yaml` described `/checkout` as a real Stripe session. Both now accurately describe FakeStripe.
+- Also documented `tools/fake_stripe_cli.py` in the README — it existed but was never surfaced, and it's the direct stand-in for the brief's "use the Stripe CLI to forward and replay webhooks locally" requirement.
+
+---
+
 ## Status
 
 | Phase | What | Status |
@@ -126,5 +140,6 @@ Retrying with the same `idempotency_key` returns the identical result (`duplicat
 | 4 | Cost rollups + AI-token pricing rules | ✅ Done — 31/31 tests |
 | 5 | Demo prep (see `DEMO.md`) | ✅ Done |
 | Stretch | Usage alerts + frontend dashboard | ✅ Done — 40/40 tests |
+| Cross-check | Re-verified against the full brief — found + fixed a negative-quantity billing bug and stale docs | ✅ Done — 46/46 tests |
 
 Core Definition of Done (§6) is complete. See `DESIGN.md` and `EVIDENCE.md` for full detail.

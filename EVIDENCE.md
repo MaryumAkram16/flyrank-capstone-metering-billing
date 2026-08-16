@@ -101,3 +101,23 @@ See README "Limitations" for the full rationale.
   from `/fake-checkout/{id}/pay` instead of a parsed object. Regression test:
   `tests/test_webhooks.py::test_reserialized_payload_with_different_whitespace_fails_verification`.
   Full suite: `pytest -q` → 40 passed.
+
+## Cross-check against the brief (validation gap found + fixed)
+- Re-read the brief's constraints and probes against the live API rather than assuming the
+  existing test suite covered everything. Found: `POST /generate` with `quantity: -500` was
+  silently accepted, dropped `used_this_month` from 999 to 499 (bypassing quota entirely), and
+  returned a **negative cost** (`-$0.050000`) — a direct instance of the "giving away unlimited
+  access, or losing revenue" failure the brief calls out by name.
+- Fix: `quantity` on the `/generate` request model now requires `Field(gt=0)`; `ai_tokens`
+  metadata token counts are explicitly validated as non-negative integers before any quota
+  check or recording happens.
+- Evidence: `tests/test_api_validation.py` (6 tests) — negative quantity → 422, zero quantity →
+  422, negative token count → 400, non-integer token count → 400, valid positive quantity still
+  works, and a rejected negative-quantity request leaves `/usage` completely unchanged. Live
+  run: `POST /generate {quantity:-500}` → `422 {"detail":[{"type":"greater_than",...}]}`;
+  `GET /usage` immediately after → `used: 999` (unchanged, not 499). Full suite: `pytest -q` →
+  46 passed.
+- Also fixed while cross-checking: `.env.example` had unused, misleading real-Stripe fields
+  left over from before the FakeStripe swap; `capstone.yaml` described `/checkout` as real
+  Stripe; `tools/fake_stripe_cli.py` (the stand-in for `stripe listen`/`stripe trigger`) existed
+  but was undocumented. All three corrected.
