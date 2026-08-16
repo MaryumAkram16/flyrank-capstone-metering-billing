@@ -88,6 +88,8 @@ building this — 999/1000 (99.9%) must never round up to a misleading "100%" wa
 
 ## Frontend dashboard
 
+![Usage Ledger dashboard showing a Pro-tier tenant with API call and AI token meters, cost rollup, and activity log](https://github.com/MaryumAkram16/flyrank-capstone-metering-billing/blob/main/docs/dashboard-screenshot.png?raw=true)
+
 `GET /dashboard` serves a small vanilla-JS/HTML/CSS frontend (`static/dashboard.html`, no build
 step) over the JSON API above: live usage meters for API calls and AI tokens, the cost rollup,
 active alerts, and an activity log, with buttons that exercise the real endpoints — meter an API
