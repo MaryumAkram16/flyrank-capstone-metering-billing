@@ -61,7 +61,7 @@ python -m app.seed             # seed a tenant near quota
 uvicorn app.main:app --reload
 ```
 
-- Run tests: `pytest -q`
+- Run tests: `pytest -q`. GitHub Actions runs the same suite on every push and pull request ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)).
 - Try the dashboard: `http://localhost:8000/dashboard`
 - Run the demo script: `python -m tools.demo` (see `DEMO.md`)
 - Replay/trigger webhooks locally (stands in for `stripe listen` / `stripe trigger`):
